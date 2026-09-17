@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="PT-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="stylesheet" href="style.css">
+  <title>Ivanildo Tec · Estoque & Projetos</title>
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">IT</span>
+      <div>
+        <h1>Ivanildo Tec</h1>
+        <p>Controle de estoque e projetos</p>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button id="tabEstoqueBtn" class="tab-btn is-active" data-tab="estoque">Estoque</button>
+    <button id="tabProjetosBtn" class="tab-btn" data-tab="projetos">Projetos</button>
+  </nav>
+
+  <main>
+
+    <!-- ESTOQUE -->
+    <section id="estoqueSection" class="view is-active">
+      <div class="section-head">
+        <div>
+          <h2>Estoque</h2>
+          <p class="section-sub" id="stockSummary">Nenhum produto cadastrado</p>
+        </div>
+        <button id="addProductBtn" class="btn btn-primary">Adicionar produto</button>
+      </div>
+
+      <div id="productsEmpty" class="empty-state">
+        <p>Seu estoque está vazio.</p>
+        <span>Cadastre o primeiro produto para começar a controlar quantidade, preço e categoria.</span>
+      </div>
+
+      <div id="productsGrid" class="products-grid"></div>
+    </section>
+
+    <!-- PROJETOS -->
+    <section id="projetosSection" class="view">
+      <div class="section-head">
+        <div>
+          <h2>Projetos</h2>
+          <p class="section-sub" id="projectsSummary">Nenhum projeto realizado</p>
+        </div>
+        <button id="addProjectBtn" class="btn btn-primary">Novo projeto</button>
+      </div>
+
+      <div id="projectsEmpty" class="empty-state">
+        <p>Nenhum projeto no histórico ainda.</p>
+        <span>Crie um projeto, selecione os produtos usados e o orçamento é calculado automaticamente.</span>
+      </div>
+
+      <div id="projectsList" class="projects-list"></div>
+    </section>
+
+  </main>
+
+  <!-- Modal: Adicionar/Editar Produto -->
+  <div id="productModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="productModalTitle">Adicionar produto</h3>
+        <button type="button" class="icon-close" data-close="productModal">&times;</button>
+      </div>
+      <form id="productForm">
+        <input type="hidden" id="productId">
+
+        <label class="field">
+          <span>Nome do produto</span>
+          <input type="text" id="productName" required placeholder="Ex: Cabo HDMI 2m">
+        </label>
+
+        <label class="field">
+          <span>Categoria</span>
+          <input type="text" id="productCategory" required placeholder="Ex: Cabos, Periféricos...">
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Preço unitário (R$)</span>
+            <input type="number" id="productPrice" min="0" step="0.01" required placeholder="0,00">
+          </label>
+          <label class="field">
+            <span>Quantidade atual</span>
+            <input type="number" id="productQty" min="0" step="1" required placeholder="0">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Quantidade mínima <em>(dispara alerta de estoque baixo)</em></span>
+          <input type="number" id="productMinQty" min="0" step="1" required placeholder="0">
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close="productModal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar produto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Novo Projeto -->
+  <div id="projectModal" class="modal-overlay">
+    <div class="modal modal-large">
+      <div class="modal-head">
+        <h3>Novo projeto</h3>
+        <button type="button" class="icon-close" data-close="projectModal">&times;</button>
+      </div>
+      <form id="projectForm">
+        <div class="field-row">
+          <label class="field">
+            <span>Nome do projeto</span>
+            <input type="text" id="projectName" required placeholder="Ex: Instalação rede - loja X">
+          </label>
+          <label class="field">
+            <span>Cliente</span>
+            <input type="text" id="clientName" required placeholder="Nome do cliente">
+          </label>
+        </div>
+
+        <h4 class="subhead">Produtos utilizados</h4>
+        <div id="projectProductsList" class="project-products-list"></div>
+
+        <div class="budget-preview">
+          <span>Orçamento estimado</span>
+          <strong id="budgetPreview">R$ 0,00</strong>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close="projectModal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Finalizar projeto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Detalhes do Projeto -->
+  <div id="projectDetailsModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="projectDetailsTitle"></h3>
+        <button type="button" class="icon-close" data-close="projectDetailsModal">&times;</button>
+      </div>
+      <div id="projectDetailsContent"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close="projectDetailsModal">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
