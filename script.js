@@ -1,34 +1,22 @@
-// ===== Ivanildo Tec — Estoque & Projetos =====
-// Dados salvos no localStorage do navegador (persistem entre acessos).
+// ===== Ivanildo Tec — Estoque & Projetos (Supabase) =====
 
-const STORAGE_PRODUCTS = 'ivanildoTec_products';
-const STORAGE_PROJECTS = 'ivanildoTec_projects';
+const SUPABASE_URL = 'https://onquavfpeweqlcqeyyar.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_JmfrdYagJLA8t8TqyIr7eg_At42pHXq';
 
-let products = loadFromStorage(STORAGE_PRODUCTS, []);
-let projects = loadFromStorage(STORAGE_PROJECTS, []);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-function loadFromStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (e) {
-    console.error('Erro ao ler localStorage:', e);
-    return fallback;
-  }
-}
-
-function saveProducts() {
-  localStorage.setItem(STORAGE_PRODUCTS, JSON.stringify(products));
-}
-function saveProjects() {
-  localStorage.setItem(STORAGE_PROJECTS, JSON.stringify(projects));
-}
-
-function formatMoney(value) {
-  return (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+let products = [];
+let projects = [];
+let realtimeChannels = [];
 
 // ---------- Elementos ----------
+const authScreen = document.getElementById('authScreen');
+const appScreen = document.getElementById('appScreen');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+const userEmailEl = document.getElementById('userEmail');
+const logoutBtn = document.getElementById('logoutBtn');
+
 const tabBtns = document.querySelectorAll('.tab-btn');
 const views = document.querySelectorAll('.view');
 
@@ -53,16 +41,115 @@ const projectDetailsModal = document.getElementById('projectDetailsModal');
 const projectDetailsTitle = document.getElementById('projectDetailsTitle');
 const projectDetailsContent = document.getElementById('projectDetailsContent');
 
+// ---------- Utilitários ----------
+function formatMoney(value) {
+  return (Number(value) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+// ============================================================
+// AUTENTICAÇÃO
+// ============================================================
+
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loginError.style.display = 'none';
+
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const submitBtn = loginForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Entrando...';
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Entrar';
+
+  if (error) {
+    loginError.textContent = 'Email ou senha incorretos.';
+    loginError.style.display = 'block';
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await supabase.auth.signOut();
+});
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session) {
+    showApp(session);
+  } else {
+    showLogin();
+  }
+});
+
+function showLogin() {
+  authScreen.style.display = 'flex';
+  appScreen.style.display = 'none';
+  loginForm.reset();
+  unsubscribeRealtime();
+}
+
+async function showApp(session) {
+  authScreen.style.display = 'none';
+  appScreen.style.display = 'block';
+  userEmailEl.textContent = session.user.email;
+  await loadProducts();
+  await loadProjects();
+  subscribeRealtime();
+}
+
+// Verifica se já existe uma sessão salva ao abrir a página
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (session) showApp(session);
+  else showLogin();
+});
+
+// ============================================================
+// TEMPO REAL — reflete mudanças feitas por qualquer usuário
+// ============================================================
+
+function subscribeRealtime() {
+  unsubscribeRealtime();
+
+  const ch1 = supabase
+    .channel('produtos-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos' }, () => loadProducts())
+    .subscribe();
+
+  const ch2 = supabase
+    .channel('projetos-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projetos' }, () => loadProjects())
+    .subscribe();
+
+  const ch3 = supabase
+    .channel('projeto-itens-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projeto_itens' }, () => loadProjects())
+    .subscribe();
+
+  realtimeChannels = [ch1, ch2, ch3];
+}
+
+function unsubscribeRealtime() {
+  realtimeChannels.forEach(ch => supabase.removeChannel(ch));
+  realtimeChannels = [];
+}
+
 // ---------- Abas ----------
 tabBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
     tabBtns.forEach(b => b.classList.toggle('is-active', b === btn));
-    views.forEach(v => v.classList.toggle('is-active', v.id === `${tab}Secao` || v.id === `${tab}Section`));
+    views.forEach(v => v.classList.toggle('is-active', v.id === `${tab}Section`));
   });
 });
 
-// ---------- Modais (abrir/fechar genérico) ----------
+// ---------- Modais ----------
 document.querySelectorAll('[data-close]').forEach(el => {
   el.addEventListener('click', () => {
     document.getElementById(el.dataset.close).classList.remove('is-open');
@@ -78,6 +165,16 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // PRODUTOS
 // ============================================================
 
+async function loadProducts() {
+  const { data, error } = await supabase.from('produtos').select('*').order('name');
+  if (error) {
+    console.error('Erro ao carregar produtos:', error);
+    return;
+  }
+  products = data;
+  renderProducts();
+}
+
 function renderProducts() {
   productsGrid.innerHTML = '';
 
@@ -91,12 +188,12 @@ function renderProducts() {
   productsEmpty.style.display = 'none';
   productsGrid.style.display = 'grid';
 
-  const lowCount = products.filter(p => p.qty <= p.minQty).length;
+  const lowCount = products.filter(p => p.qty <= p.min_qty).length;
   stockSummary.textContent = `${products.length} produto${products.length > 1 ? 's' : ''} cadastrado${products.length > 1 ? 's' : ''}` +
     (lowCount > 0 ? ` · ${lowCount} em estoque baixo` : '');
 
   products.forEach(p => {
-    const isLow = p.qty <= p.minQty;
+    const isLow = p.qty <= p.min_qty;
     const card = document.createElement('article');
     card.className = 'product-card' + (isLow ? ' is-low' : '');
     card.innerHTML = `
@@ -108,7 +205,7 @@ function renderProducts() {
       <dl class="product-stats">
         <div><dt>Preço</dt><dd>${formatMoney(p.price)}</dd></div>
         <div><dt>Em estoque</dt><dd class="${isLow ? 'stat-low' : ''}">${p.qty}</dd></div>
-        <div><dt>Mínimo</dt><dd>${p.minQty}</dd></div>
+        <div><dt>Mínimo</dt><dd>${p.min_qty}</dd></div>
       </dl>
       <div class="card-actions">
         <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${p.id}">Editar</button>
@@ -133,7 +230,7 @@ function openProductModal(id = null) {
     document.getElementById('productCategory').value = p.category;
     document.getElementById('productPrice').value = p.price;
     document.getElementById('productQty').value = p.qty;
-    document.getElementById('productMinQty').value = p.minQty;
+    document.getElementById('productMinQty').value = p.min_qty;
   } else {
     productModalTitle.textContent = 'Adicionar produto';
     productForm.reset();
@@ -144,34 +241,50 @@ function openProductModal(id = null) {
 
 document.getElementById('addProductBtn').addEventListener('click', () => openProductModal());
 
-productForm.addEventListener('submit', (e) => {
+productForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('productId').value;
   const name = document.getElementById('productName').value.trim();
   const category = document.getElementById('productCategory').value.trim();
   const price = parseFloat(document.getElementById('productPrice').value);
   const qty = parseInt(document.getElementById('productQty').value, 10);
-  const minQty = parseInt(document.getElementById('productMinQty').value, 10);
+  const min_qty = parseInt(document.getElementById('productMinQty').value, 10);
 
+  const submitBtn = productForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+
+  let error;
   if (id) {
-    const p = products.find(pr => pr.id === id);
-    Object.assign(p, { name, category, price, qty, minQty });
+    ({ error } = await supabase
+      .from('produtos')
+      .update({ name, category, price, qty, min_qty, updated_at: new Date().toISOString() })
+      .eq('id', id));
   } else {
-    products.push({ id: cryptoId(), name, category, price, qty, minQty });
+    ({ error } = await supabase.from('produtos').insert([{ name, category, price, qty, min_qty }]));
   }
 
-  saveProducts();
-  renderProducts();
+  submitBtn.disabled = false;
+
+  if (error) {
+    alert('Erro ao salvar produto: ' + error.message);
+    return;
+  }
+
   productModal.classList.remove('is-open');
+  loadProducts();
 });
 
-function deleteProduct(id) {
+async function deleteProduct(id) {
   const p = products.find(pr => pr.id === id);
   if (!p) return;
   if (!confirm(`Excluir "${p.name}" do estoque?`)) return;
-  products = products.filter(pr => pr.id !== id);
-  saveProducts();
-  renderProducts();
+
+  const { error } = await supabase.from('produtos').delete().eq('id', id);
+  if (error) {
+    alert('Erro ao excluir produto: ' + error.message);
+    return;
+  }
+  loadProducts();
 }
 
 // ============================================================
@@ -227,7 +340,7 @@ function getSelectedItems() {
     const qty = Math.max(0, parseInt(qtyInput.value, 10) || 0);
     const product = products.find(p => p.id === id);
     if (product && qty > 0) {
-      items.push({ id, name: product.name, price: product.price, qty });
+      items.push({ produto_id: id, name: product.name, price: product.price, qty });
     }
   });
   return items;
@@ -239,7 +352,7 @@ function updateBudgetPreview() {
   budgetPreview.textContent = formatMoney(total);
 }
 
-projectForm.addEventListener('submit', (e) => {
+projectForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const name = document.getElementById('projectName').value.trim();
@@ -251,37 +364,42 @@ projectForm.addEventListener('submit', (e) => {
     return;
   }
 
-  for (const item of items) {
-    const product = products.find(p => p.id === item.id);
-    if (!product || item.qty > product.qty) {
-      alert(`Quantidade indisponível de "${item.name}" em estoque.`);
-      return;
-    }
+  const submitBtn = projectForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Finalizando...';
+
+  const { error } = await supabase.rpc('finalizar_projeto', {
+    p_name: name,
+    p_client: client,
+    p_items: items.map(it => ({ produto_id: it.produto_id, qty: it.qty }))
+  });
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Finalizar projeto';
+
+  if (error) {
+    alert('Não foi possível finalizar o projeto: ' + error.message);
+    return;
   }
 
-  // Baixa automática no estoque
-  items.forEach(item => {
-    const product = products.find(p => p.id === item.id);
-    product.qty -= item.qty;
-  });
-  saveProducts();
-  renderProducts();
-
-  const total = items.reduce((sum, it) => sum + it.price * it.qty, 0);
-
-  projects.unshift({
-    id: cryptoId(),
-    name,
-    client,
-    date: new Date().toLocaleDateString('pt-BR'),
-    items,
-    total
-  });
-  saveProjects();
-  renderProjects();
-
   projectModal.classList.remove('is-open');
+  loadProducts();
+  loadProjects();
 });
+
+async function loadProjects() {
+  const { data, error } = await supabase
+    .from('projetos')
+    .select('*, projeto_itens(*)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Erro ao carregar projetos:', error);
+    return;
+  }
+  projects = data;
+  renderProjects();
+}
 
 function renderProjects() {
   projectsList.innerHTML = '';
@@ -296,16 +414,17 @@ function renderProjects() {
   projectsEmpty.style.display = 'none';
   projectsList.style.display = 'flex';
 
-  const totalFaturado = projects.reduce((sum, p) => sum + p.total, 0);
+  const totalFaturado = projects.reduce((sum, p) => sum + Number(p.total), 0);
   projectsSummary.textContent = `${projects.length} projeto${projects.length > 1 ? 's' : ''} · total ${formatMoney(totalFaturado)}`;
 
   projects.forEach(proj => {
     const row = document.createElement('article');
     row.className = 'project-row';
+    const date = new Date(proj.created_at).toLocaleDateString('pt-BR');
     row.innerHTML = `
       <div class="project-row-main">
         <h3>${escapeHtml(proj.name)}</h3>
-        <p class="muted">Cliente: ${escapeHtml(proj.client)} · ${proj.date}</p>
+        <p class="muted">Cliente: ${escapeHtml(proj.client)} · ${date}</p>
       </div>
       <div class="project-row-side">
         <strong>${formatMoney(proj.total)}</strong>
@@ -322,11 +441,13 @@ function renderProjects() {
 function showProjectDetails(id) {
   const proj = projects.find(p => p.id === id);
   if (!proj) return;
+  const date = new Date(proj.created_at).toLocaleDateString('pt-BR');
+  const itens = proj.projeto_itens || [];
   projectDetailsTitle.textContent = proj.name;
   projectDetailsContent.innerHTML = `
-    <p class="muted">Cliente: <strong>${escapeHtml(proj.client)}</strong> · ${proj.date}</p>
+    <p class="muted">Cliente: <strong>${escapeHtml(proj.client)}</strong> · ${date}</p>
     <ul class="details-list">
-      ${proj.items.map(it => `<li><span>${it.qty}× ${escapeHtml(it.name)}</span><span>${formatMoney(it.price * it.qty)}</span></li>`).join('')}
+      ${itens.map(it => `<li><span>${it.qty}× ${escapeHtml(it.produto_nome)}</span><span>${formatMoney(it.price * it.qty)}</span></li>`).join('')}
     </ul>
     <div class="details-total">
       <span>Orçamento total</span>
@@ -335,17 +456,3 @@ function showProjectDetails(id) {
   `;
   projectDetailsModal.classList.add('is-open');
 }
-
-// ---------- Utilitários ----------
-function cryptoId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
-}
-
-// ---------- Init ----------
-renderProducts();
-renderProjects();

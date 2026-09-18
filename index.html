@@ -5,15 +5,47 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <link rel="stylesheet" href="style.css">
   <title>Ivanildo Tec · Estoque & Projetos</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-  <header class="app-header">
-    <div class="brand">
+  <!-- TELA DE LOGIN -->
+  <div id="authScreen" class="auth-screen">
+    <form id="loginForm" class="auth-card">
       <span class="brand-mark">IT</span>
-      <div>
-        <h1>Ivanildo Tec</h1>
-        <p>Controle de estoque e projetos</p>
+      <h1>Ivanildo Tec</h1>
+      <p>Entre para acessar o estoque e os projetos</p>
+
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </label>
+      <label class="field">
+        <span>Senha</span>
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </label>
+
+      <p id="loginError" class="auth-error"></p>
+
+      <button type="submit" class="btn btn-primary auth-submit">Entrar</button>
+    </form>
+  </div>
+
+  <!-- APLICAÇÃO -->
+  <div id="appScreen" class="app-screen">
+
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand">
+        <span class="brand-mark">IT</span>
+        <div>
+          <h1>Ivanildo Tec</h1>
+          <p>Controle de estoque e projetos</p>
+        </div>
+      </div>
+      <div class="user-box">
+        <span id="userEmail" class="muted"></span>
+        <button id="logoutBtn" class="btn btn-ghost btn-sm">Sair</button>
       </div>
     </div>
   </header>
@@ -154,6 +186,8 @@
         <button type="button" class="btn btn-ghost" data-close="projectDetailsModal">Fechar</button>
       </div>
     </div>
+  </div>
+
   </div>
 
   <script src="script.js"></script>
