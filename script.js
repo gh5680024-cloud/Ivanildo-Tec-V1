@@ -3,7 +3,7 @@
 const SUPABASE_URL = 'https://onquavfpeweqlcqeyyar.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_JmfrdYagJLA8t8TqyIr7eg_At42pHXq';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let products = [];
 let projects = [];
@@ -65,7 +65,7 @@ loginForm.addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Entrando...';
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
   submitBtn.disabled = false;
   submitBtn.textContent = 'Entrar';
@@ -77,10 +77,10 @@ loginForm.addEventListener('submit', async (e) => {
 });
 
 logoutBtn.addEventListener('click', async () => {
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
 });
 
-supabase.auth.onAuthStateChange((_event, session) => {
+supabaseClient.auth.onAuthStateChange((_event, session) => {
   if (session) {
     showApp(session);
   } else {
@@ -105,7 +105,7 @@ async function showApp(session) {
 }
 
 // Verifica se já existe uma sessão salva ao abrir a página
-supabase.auth.getSession().then(({ data: { session } }) => {
+supabaseClient.auth.getSession().then(({ data: { session } }) => {
   if (session) showApp(session);
   else showLogin();
 });
@@ -117,17 +117,17 @@ supabase.auth.getSession().then(({ data: { session } }) => {
 function subscribeRealtime() {
   unsubscribeRealtime();
 
-  const ch1 = supabase
+  const ch1 = supabaseClient
     .channel('produtos-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos' }, () => loadProducts())
     .subscribe();
 
-  const ch2 = supabase
+  const ch2 = supabaseClient
     .channel('projetos-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'projetos' }, () => loadProjects())
     .subscribe();
 
-  const ch3 = supabase
+  const ch3 = supabaseClient
     .channel('projeto-itens-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'projeto_itens' }, () => loadProjects())
     .subscribe();
@@ -136,7 +136,7 @@ function subscribeRealtime() {
 }
 
 function unsubscribeRealtime() {
-  realtimeChannels.forEach(ch => supabase.removeChannel(ch));
+  realtimeChannels.forEach(ch => supabaseClient.removeChannel(ch));
   realtimeChannels = [];
 }
 
@@ -166,7 +166,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // ============================================================
 
 async function loadProducts() {
-  const { data, error } = await supabase.from('produtos').select('*').order('name');
+  const { data, error } = await supabaseClient.from('produtos').select('*').order('name');
   if (error) {
     console.error('Erro ao carregar produtos:', error);
     return;
@@ -255,12 +255,12 @@ productForm.addEventListener('submit', async (e) => {
 
   let error;
   if (id) {
-    ({ error } = await supabase
+    ({ error } = await supabaseClient
       .from('produtos')
       .update({ name, category, price, qty, min_qty, updated_at: new Date().toISOString() })
       .eq('id', id));
   } else {
-    ({ error } = await supabase.from('produtos').insert([{ name, category, price, qty, min_qty }]));
+    ({ error } = await supabaseClient.from('produtos').insert([{ name, category, price, qty, min_qty }]));
   }
 
   submitBtn.disabled = false;
@@ -279,7 +279,7 @@ async function deleteProduct(id) {
   if (!p) return;
   if (!confirm(`Excluir "${p.name}" do estoque?`)) return;
 
-  const { error } = await supabase.from('produtos').delete().eq('id', id);
+  const { error } = await supabaseClient.from('produtos').delete().eq('id', id);
   if (error) {
     alert('Erro ao excluir produto: ' + error.message);
     return;
@@ -368,7 +368,7 @@ projectForm.addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = 'Finalizando...';
 
-  const { error } = await supabase.rpc('finalizar_projeto', {
+  const { error } = await supabaseClient.rpc('finalizar_projeto', {
     p_name: name,
     p_client: client,
     p_items: items.map(it => ({ produto_id: it.produto_id, qty: it.qty }))
@@ -388,7 +388,7 @@ projectForm.addEventListener('submit', async (e) => {
 });
 
 async function loadProjects() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('projetos')
     .select('*, projeto_itens(*)')
     .order('created_at', { ascending: false });
